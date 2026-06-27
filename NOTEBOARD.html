@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NoteBoard — Pusat Catatan & Deadline</title>
+<style>
+/* =========================================================
+   NOTEBOARD — single file app
+   Hanya HTML + CSS + Vanilla JS. Tanpa library eksternal.
+   Penyimpanan: localStorage (auto-save).
+   ========================================================= */
+
+/* ---------- Design tokens ---------- */
+:root{
+  --accent: #6366f1;        /* indigo default, bisa diubah di Pengaturan */
+  --accent-2: #06b6d4;      /* cyan */
+  --accent-3: #a855f7;      /* purple */
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font: "Plus Jakarta Sans","Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --fs: 15px;               /* ukuran font global, diatur di Pengaturan */
+  --speed: .22s;
+}
+
+/* DARK */
+[data-theme="dark"]{
+  --bg: #0b1020;
+  --bg-2: #0e1428;
+  --grad: radial-gradient(1200px 600px at 80% -10%, rgba(168,85,247,.18), transparent 60%),
+          radial-gradient(1000px 500px at -10% 110%, rgba(6,182,212,.16), transparent 55%),
+          linear-gradient(160deg,#0b1020 0%, #0a0f1f 100%);
+  --glass: rgba(255,255,255,.06);
+  --glass-2: rgba(255,255,255,.04);
+  --stroke: rgba(255,255,255,.10);
+  --text: #e8ecf6;
+  --muted: #94a0b8;
+  --shadow: 0 20px 60px rgba(0,0,0,.45);
+}
+/* LIGHT */
+[data-theme="light"]{
+  --bg: #eef1f8;
+  --bg-2: #ffffff;
+  --grad: radial-gradient(1200px 600px at 80% -10%, rgba(168,85,247,.14), transparent 60%),
+          radial-gradient(1000px 500px at -10% 110%, rgba(6,182,212,.14), transparent 55%),
+          linear-gradient(160deg,#eef1f8 0%, #e7ebf5 100%);
+  --glass: rgba(255,255,255,.65);
+  --glass-2: rgba(255,255,255,.5);
+  --stroke: rgba(20,30,60,.10);
+  --text: #1c2540;
+  --muted: #5b6786;
+  --shadow: 0 18px 50px rgba(40,55,110,.18);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font);
+  font-size:var(--fs);
+  color:var(--text);
+  background:var(--bg);
+  background-image:var(--grad);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button,input,select,textarea{font-family:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:20px}
+::selection{background:var(--accent);color:#fff}
+
+.hidden{display:none !important}
+
+/* ---------- Loading screen ---------- */
+#loader{
+  position:fixed;inset:0;z-index:9999;display:grid;place-items:center;
+  background:var(--bg);background-image:var(--grad);
+  transition:opacity .5s ease;
+}
+.loader-box{text-align:center}
+.spinner{
+  width:54px;height:54px;border-radius:50%;margin:0 auto 18px;
+  border:3px solid var(--stroke);
+  border-top-color:var(--accent);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-box .brand{font-weight:800;font-size:22px;letter-spacing:.5px}
+.loader-box .sub{color:var(--muted);margin-top:4px;font-size:13px}
+
+/* ---------- Glass helper ---------- */
+.glass{
+  background:var(--glass);
+  border:1px solid var(--stroke);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-radius:var(--radius);
+}
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+#login{position:fixed;inset:0;display:grid;place-items:center;padding:20px}
+.login-card{
+  width:min(420px,92vw);padding:34px 30px;text-align:center;
+  box-shadow:var(--shadow);animation:rise .5s ease both;
+}
+.logo-badge{
+  width:62px;height:62px;border-radius:18px;margin:0 auto 14px;
+  display:grid;place-items:center;font-size:28px;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-3));
+  box-shadow:0 12px 30px rgba(99,102,241,.45);
+}
+.login-card h1{margin:6px 0 2px;font-size:24px;font-weight:800}
+.login-card p.s{color:var(--muted);margin:0 0 22px;font-size:13.5px}
+.field{margin-bottom:14px;text-align:left}
+.field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.input{
+  width:100%;padding:12px 14px;border-radius:var(--radius-sm);
+  background:var(--glass-2);border:1px solid var(--stroke);
+  outline:none;transition:border var(--speed), box-shadow var(--speed);
+  font-size:14px;
+}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.25)}
+.btn{
+  width:100%;padding:12px 16px;border-radius:var(--radius-sm);color:#fff;font-weight:700;
+  background:linear-gradient(135deg,var(--accent),var(--accent-3));
+  transition:transform var(--speed), box-shadow var(--speed);
+  box-shadow:0 10px 24px rgba(99,102,241,.35);
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(99,102,241,.5)}
+.btn:active{transform:translateY(0)}
+.hint{margin-top:16px;font-size:12px;color:var(--muted)}
+.err{color:#f87171;font-size:13px;margin-top:-4px;margin-bottom:10px;min-height:16px;text-align:left}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* =========================================================
+   APP SHELL
+   ========================================================= */
+#app{height:100vh;display:flex}
+
+/* Sidebar */
+#sidebar{
+  width:248px;flex:0 0 auto;padding:18px 14px;display:flex;flex-direction:column;gap:6px;
+  border-right:1px solid var(--stroke);
+  background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  transition:width var(--speed) ease;
+}
+#sidebar.collapsed{width:74px}
+.side-top{display:flex;align-items:center;gap:10px;padding:6px 8px 16px}
+.side-logo{
+  width:38px;height:38px;border-radius:11px;flex:0 0 auto;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-3));
+}
+.side-name{font-weight:800;font-size:16px;line-height:1.1}
+.side-name small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+#sidebar.collapsed .side-name,#sidebar.collapsed .nav-label,#sidebar.collapsed .side-foot small{display:none}
+.nav-item{
+  display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;
+  color:var(--muted);font-weight:600;font-size:14px;transition:all var(--speed);position:relative;
+}
+.nav-item .ic{width:20px;text-align:center;flex:0 0 auto}
+.nav-item:hover{background:var(--glass-2);color:var(--text)}
+.nav-item.active{
+  color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-3));
+  box-shadow:0 8px 20px rgba(99,102,241,.35);
+}
+.nav-badge{margin-left:auto;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:20px;font-size:11px}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+
+/* Main */
+#main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--stroke);
+  background:var(--glass-2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+.icon-btn{
+  width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:17px;
+  background:var(--glass-2);border:1px solid var(--stroke);transition:all var(--speed);color:var(--text);
+}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.page-title{font-size:18px;font-weight:800}
+.page-title small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.topbar-search{
+  margin-left:auto;display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;
+  background:var(--glass-2);border:1px solid var(--stroke);width:min(340px,40vw);
+  transition:border var(--speed),box-shadow var(--speed),width var(--speed);
+}
+.topbar-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.22);width:min(420px,46vw)}
+.topbar-search input{flex:1;border:none;background:none;outline:none;font-size:14px}
+.content{flex:1;overflow:auto;padding:22px}
+
+/* Views */
+.view{animation:fade .3s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------- Dashboard ---------- */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px;margin-bottom:22px}
+.stat{padding:18px;position:relative;overflow:hidden;transition:transform var(--speed)}
+.stat:hover{transform:translateY(-3px)}
+.stat .ic{
+  width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:20px;margin-bottom:12px;color:#fff;
+}
+.stat .num{font-size:30px;font-weight:800;line-height:1}
+.stat .lbl{color:var(--muted);font-size:13px;margin-top:5px;font-weight:600}
+.g-indigo{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+.g-cyan{background:linear-gradient(135deg,#06b6d4,#3b82f6)}
+.g-green{background:linear-gradient(135deg,#10b981,#059669)}
+.g-amber{background:linear-gradient(135deg,#f59e0b,#f97316)}
+.g-red{background:linear-gradient(135deg,#ef4444,#e11d48)}
+.g-purple{background:linear-gradient(135deg,#a855f7,#7c3aed)}
+.g-slate{background:linear-gradient(135deg,#64748b,#475569)}
+
+.panel{padding:18px 20px;margin-bottom:18px}
+.panel h3{margin:0 0 14px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
+.dash-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}
+@media(max-width:900px){.dash-cols{grid-template-columns:1fr}}
+
+.mini-note{
+  display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;
+  border:1px solid var(--stroke);background:var(--glass-2);margin-bottom:9px;cursor:pointer;transition:all var(--speed);
+}
+.mini-note:hover{border-color:var(--accent);transform:translateX(3px)}
+.mini-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.mini-note .t{font-weight:700;font-size:13.5px}
+.mini-note .m{color:var(--muted);font-size:11.5px}
+.mini-note .badge{margin-left:auto}
+
+.bar{height:9px;border-radius:20px;background:var(--glass-2);overflow:hidden;margin:6px 0 2px}
+.bar > span{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+
+/* ---------- Notes split view ---------- */
+.notes-wrap{display:grid;grid-template-columns:340px 1fr;gap:18px;height:100%}
+@media(max-width:860px){.notes-wrap{grid-template-columns:1fr}.editor-pane.empty-on-mobile{display:none}}
+.list-pane{display:flex;flex-direction:column;min-height:0}
+.list-tools{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.chip{
+  padding:7px 12px;border-radius:20px;font-size:12.5px;font-weight:600;color:var(--muted);
+  background:var(--glass-2);border:1px solid var(--stroke);transition:all var(--speed);white-space:nowrap;
+}
+.chip:hover{color:var(--text)}
+.chip.active{color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-3));border-color:transparent}
+.sel{
+  padding:8px 10px;border-radius:10px;background:var(--glass-2);border:1px solid var(--stroke);
+  font-size:13px;outline:none;
+}
+.list-scroll{flex:1;overflow:auto;padding-right:4px;min-height:0}
+.note-card{
+  padding:13px 14px;border-radius:14px;border:1px solid var(--stroke);background:var(--glass);
+  margin-bottom:10px;cursor:pointer;transition:all var(--speed);position:relative;border-left:4px solid var(--accent);
+}
+.note-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.note-card.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.note-card .nc-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.note-card .nc-title{font-weight:800;font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note-card .nc-snippet{color:var(--muted);font-size:12.5px;line-height:1.4;max-height:34px;overflow:hidden}
+.note-card .nc-meta{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
+.pin-star{font-size:13px}
+
+.badge{padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.b-baru{background:rgba(59,130,246,.18);color:#60a5fa}
+.b-proses{background:rgba(245,158,11,.18);color:#fbbf24}
+.b-pending{background:rgba(168,85,247,.18);color:#c084fc}
+.b-selesai{background:rgba(16,185,129,.18);color:#34d399}
+.b-batal{background:rgba(148,163,184,.18);color:#94a3b8}
+.p-rendah{background:rgba(148,163,184,.16);color:#94a3b8}
+.p-sedang{background:rgba(59,130,246,.16);color:#60a5fa}
+.p-tinggi{background:rgba(245,158,11,.18);color:#fbbf24}
+.p-sangat{background:rgba(239,68,68,.18);color:#f87171}
+.b-late{background:rgba(239,68,68,.2);color:#f87171}
+
+/* Editor */
+.editor-pane{display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden}
+.editor-inner{padding:20px 22px;overflow:auto;flex:1}
+.editor-head{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.editor-head .grow{flex:1}
+.title-input{
+  width:100%;font-size:21px;font-weight:800;border:none;background:none;outline:none;padding:4px 2px;
+  border-bottom:2px solid transparent;transition:border var(--speed);
+}
+.title-input:focus{border-bottom-color:var(--accent)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+.fl label{display:block;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.fl .input,.fl .sel{width:100%}
+textarea.input{min-height:160px;resize:vertical;line-height:1.6}
+.save-pill{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.save-pill .dot{width:8px;height:8px;border-radius:50%;background:#34d399}
+
+/* Checklist */
+.check-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--glass-2);margin-bottom:7px;border:1px solid var(--stroke)}
+.check-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.check-row input[type=text]{flex:1;border:none;background:none;outline:none;font-size:13.5px}
+.check-row input.done{text-decoration:line-through;color:var(--muted)}
+.check-row .del{color:var(--muted);font-size:14px}
+.add-check{font-size:12.5px;color:var(--accent);font-weight:700;margin-top:4px}
+
+/* Tag pills */
+.tag-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;background:var(--glass-2);border:1px solid var(--stroke);font-size:11.5px;margin:2px 4px 2px 0}
+.tag-pill button{color:var(--muted);font-size:12px}
+
+/* color swatches */
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.swatch{width:26px;height:26px;border-radius:8px;border:2px solid transparent;cursor:pointer;transition:transform var(--speed)}
+.swatch:hover{transform:scale(1.12)}
+.swatch.sel{border-color:var(--text)}
+
+/* ---------- Timeline ---------- */
+.tl{position:relative;padding-left:26px}
+.tl::before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:var(--stroke)}
+.tl-item{position:relative;padding:0 0 18px 0}
+.tl-item::before{content:"";position:absolute;left:-22px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--bg)}
+.tl-date{font-size:11.5px;color:var(--muted);font-weight:700}
+.tl-text{font-size:14px;font-weight:600;margin-top:2px}
+.tl-text b{color:var(--accent)}
+
+/* ---------- Calendar ---------- */
+.cal-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.cal-dow{text-align:center;font-size:11.5px;color:var(--muted);font-weight:700;padding:4px 0;text-transform:uppercase}
+.cal-cell{
+  min-height:84px;border-radius:12px;border:1px solid var(--stroke);background:var(--glass-2);padding:7px 8px;cursor:pointer;
+  transition:all var(--speed);display:flex;flex-direction:column;gap:4px;
+}
+.cal-cell:hover{border-color:var(--accent)}
+.cal-cell.empty{background:transparent;border-color:transparent;cursor:default}
+.cal-cell.today{box-shadow:0 0 0 2px var(--accent) inset}
+.cal-day{font-size:12.5px;font-weight:700}
+.cal-dot{font-size:10.5px;padding:1px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- Empty state ---------- */
+.empty{display:grid;place-items:center;height:100%;text-align:center;color:var(--muted);padding:40px}
+.empty .ic{font-size:46px;margin-bottom:12px;opacity:.6}
+.empty h4{margin:0 0 4px;color:var(--text);font-size:16px}
+.empty p{margin:0;font-size:13.5px;max-width:320px}
+
+/* ---------- Settings ---------- */
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--stroke)}
+.set-row:last-child{border-bottom:none}
+.set-row .lbl{font-weight:700;font-size:14px}
+.set-row .desc{color:var(--muted);font-size:12.5px;margin-top:2px}
+.switch{width:48px;height:27px;border-radius:20px;background:var(--glass-2);border:1px solid var(--stroke);position:relative;transition:background var(--speed);flex:0 0 auto}
+.switch.on{background:linear-gradient(135deg,var(--accent),var(--accent-3))}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:#fff;transition:transform var(--speed)}
+.switch.on::after{transform:translateX(21px)}
+.seg{display:flex;gap:6px}
+.seg button{padding:7px 14px;border-radius:9px;background:var(--glass-2);border:1px solid var(--stroke);font-size:13px;font-weight:600;color:var(--muted)}
+.seg button.active{color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-3));border-color:transparent}
+
+/* Backup */
+.bk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.bk-card{padding:18px;text-align:center}
+.bk-card .ic{font-size:30px;margin-bottom:10px}
+.bk-card h4{margin:0 0 4px;font-size:15px}
+.bk-card p{margin:0 0 14px;color:var(--muted);font-size:12.5px}
+.btn-soft{padding:9px 16px;border-radius:10px;font-weight:700;font-size:13px;background:var(--glass-2);border:1px solid var(--stroke);color:var(--text);transition:all var(--speed)}
+.btn-soft:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- FAB ---------- */
+.fab{
+  position:fixed;right:26px;bottom:26px;width:58px;height:58px;border-radius:50%;z-index:50;
+  display:grid;place-items:center;font-size:26px;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-3));
+  box-shadow:0 14px 34px rgba(99,102,241,.5);transition:transform var(--speed);
+}
+.fab:hover{transform:scale(1.08) rotate(90deg)}
+
+/* ---------- Modal ---------- */
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(4,7,18,.55);backdrop-filter:blur(4px);display:grid;place-items:center;padding:20px;animation:fade .2s ease both}
+.modal{width:min(440px,94vw);padding:24px;box-shadow:var(--shadow);animation:rise .25s ease both}
+.modal h3{margin:0 0 8px;font-size:18px;font-weight:800}
+.modal p{margin:0 0 20px;color:var(--muted);font-size:14px;line-height:1.5}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end}
+.btn-ghost{padding:10px 16px;border-radius:10px;font-weight:700;background:var(--glass-2);border:1px solid var(--stroke);color:var(--text)}
+.btn-danger{padding:10px 16px;border-radius:10px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ef4444,#e11d48)}
+
+/* reminder popup list */
+.rem-line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--glass-2);border:1px solid var(--stroke);margin-bottom:8px}
+.rem-line .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:#fff;flex:0 0 auto}
+.rem-line b{font-size:16px}
+
+/* ---------- Toast ---------- */
+#toasts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:10px;align-items:center}
+.toast{
+  padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:600;color:#fff;
+  background:linear-gradient(135deg,#1e293b,#0f172a);border:1px solid var(--stroke);
+  box-shadow:var(--shadow);display:flex;align-items:center;gap:9px;animation:toastIn .3s ease both;
+}
+.toast.ok{background:linear-gradient(135deg,#059669,#10b981)}
+.toast.err{background:linear-gradient(135deg,#dc2626,#ef4444)}
+.toast.info{background:linear-gradient(135deg,#4f46e5,#6366f1)}
+@keyframes toastIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.toast.out{animation:toastOut .3s ease forwards}
+@keyframes toastOut{to{opacity:0;transform:translateY(14px)}}
+
+.menu{position:absolute;z-index:300;min-width:170px;padding:6px;box-shadow:var(--shadow);border-radius:12px}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--text);text-align:left}
+.menu button:hover{background:var(--glass-2)}
+.menu button.danger{color:#f87171}
+
+@media print{
+  body *{visibility:hidden}
+  #print-area,#print-area *{visibility:visible}
+  #print-area{position:absolute;inset:0;padding:30px;color:#000;background:#fff}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Loading ===== -->
+<div id="loader">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <div class="brand">NoteBoard</div>
+    <div class="sub">Menyiapkan data Anda…</div>
+  </div>
+</div>
+
+<!-- ===== Login ===== -->
+<div id="login" class="hidden">
+  <div class="login-card glass">
+    <div class="logo-badge">◆</div>
+    <h1>NoteBoard</h1>
+    <p class="s">Masuk untuk mengelola catatan & deadline Anda</p>
+    <div class="field">
+      <label>Username</label>
+      <input id="loginUser" class="input" placeholder="admin" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="loginPass" type="password" class="input" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <div class="err" id="loginErr"></div>
+    <button class="btn" id="loginBtn">Masuk</button>
+    <div class="hint">Akun default &mdash; username <b>admin</b>, password <b>admin123</b></div>
+  </div>
+</div>
+
+<!-- ===== App ===== -->
+<div id="app" class="hidden">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="side-top">
+      <div class="side-logo">◆</div>
+      <div class="side-name">NoteBoard<small>Pusat Catatan</small></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <button class="nav-item" data-nav="settings"><span class="ic">⚙</span><span class="nav-label">Pengaturan</span></button>
+      <button class="nav-item" id="logoutBtn"><span class="ic">⏻</span><span class="nav-label">Logout</span></button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div id="main">
+    <div class="topbar">
+      <button class="icon-btn" id="toggleSide" title="Sembunyikan sidebar">☰</button>
+      <div class="page-title" id="pageTitle">Dashboard<small id="pageSub">Ringkasan aktivitas Anda</small></div>
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input id="globalSearch" placeholder="Cari catatan…  (Ctrl+F)" />
+      </div>
+      <button class="icon-btn" id="themeBtn" title="Ganti tema">🌙</button>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+
+  <button class="fab" id="fab" title="Catatan baru (Ctrl+N)">+</button>
+</div>
+
+<!-- containers -->
+<div id="modalRoot"></div>
+<div id="toasts"></div>
+<div id="print-area" class="hidden"></div>
+
+<script>
+"use strict";
+/* =========================================================
+   1. STORAGE LAYER  (analogi: localStorage = laci arsip)
+   ========================================================= */
+const KEY = { notes:"nb_notes", settings:"nb_settings", user:"nb_user", session:"nb_session" };
+
+function load(key, fallback){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function persist(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+/* =========================================================
+   2. STATE
+   ========================================================= */
+let notes    = load(KEY.notes, []);
+let settings = load(KEY.settings, { theme:"dark", accent:"#6366f1", font:15, confirmDelete:true });
+let user     = load(KEY.user, { username:"admin", password:"admin123" });
+
+let activeView   = "dashboard";
+let activeNoteId = null;
+let listFilter   = "all";
+let listSort     = "updated";
+let listSearch   = "";
+
+/* AUTO-SAVE: setiap mutasi data memanggil saveNotes() -> tidak ada tombol Save */
+function saveNotes(){ persist(KEY.notes, notes); }
+function saveSettings(){ persist(KEY.settings, settings); applySettings(); }
+
+/* =========================================================
+   3. HELPERS
+   ========================================================= */
+const $  = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => (s??"").toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function todayStr(d=new Date()){ return d.toISOString().slice(0,10); }     // YYYY-MM-DD lokal-ish
+function nowISO(){ return new Date().toISOString(); }
+function fmtDate(iso){ if(!iso) return "-"; const d=new Date(iso); return d.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}); }
+function fmtDateTime(iso){ if(!iso) return "-"; const d=new Date(iso); return d.toLocaleString("id-ID",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
+
+const STATUS = ["Baru","Sedang Diproses","Pending","Selesai","Dibatalkan"];
+const PRIOR  = ["Rendah","Sedang","Tinggi","Sangat Penting"];
+const statusClass = s => ({"Baru":"b-baru","Sedang Diproses":"b-proses","Pending":"b-pending","Selesai":"b-selesai","Dibatalkan":"b-batal"}[s]||"b-baru");
+const priorClass  = p => ({"Rendah":"p-rendah","Sedang":"p-sedang","Tinggi":"p-tinggi","Sangat Penting":"p-sangat"}[p]||"p-sedang");
+
+const LABEL_COLORS = ["#6366f1","#06b6d4","#a855f7","#10b981","#f59e0b","#ef4444","#ec4899","#64748b"];
+
+function isOverdue(n){
+  if(!n.deadline || n.status==="Selesai" || n.status==="Dibatalkan") return false;
+  return n.deadline < todayStr();
+}
+function isDueToday(n){
+  if(!n.deadline || n.status==="Selesai" || n.status==="Dibatalkan") return false;
+  return n.deadline === todayStr();
+}
+function logActivity(n, text){
+  n.activity = n.activity || [];
+  n.activity.push({ ts: nowISO(), text });
+}
+
+/* =========================================================
+   4. TOAST + MODAL
+   ========================================================= */
+function toast(msg, type="info"){
+  const t=document.createElement("div");
+  t.className="toast "+type;
+  t.innerHTML = `<span>${type==="ok"?"✓":type==="err"?"⚠":"ℹ"}</span><span>${esc(msg)}</span>`;
+  $("#toasts").appendChild(t);
+  setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.remove(),300); }, 2600);
+}
+function closeModal(){ $("#modalRoot").innerHTML=""; }
+function modal(html){
+  $("#modalRoot").innerHTML = `<div class="overlay" id="ov"><div class="modal glass">${html}</div></div>`;
+  $("#ov").addEventListener("click", e=>{ if(e.target.id==="ov") closeModal(); });
+}
+function confirmBox(title, msg, onYes, danger=true){
+  modal(`<h3>${esc(title)}</h3><p>${esc(msg)}</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="cNo">Batal</button>
+      <button class="${danger?'btn-danger':'btn'}" id="cYes" style="width:auto">Ya, lanjutkan</button>
+    </div>`);
+  $("#cNo").onclick = closeModal;
+  $("#cYes").onclick = ()=>{ closeModal(); onYes(); };
+}
+
+/* =========================================================
+   5. SETTINGS / THEME
+   ========================================================= */
+function applySettings(){
+  document.documentElement.setAttribute("data-theme", settings.theme);
+  document.documentElement.style.setProperty("--accent", settings.accent);
+  document.documentElement.style.setProperty("--fs", settings.font + "px");
+  const tb = $("#themeBtn"); if(tb) tb.textContent = settings.theme==="dark" ? "🌙" : "☀";
+}
+function toggleTheme(){
+  settings.theme = settings.theme==="dark" ? "light" : "dark";
+  saveSettings();
+}
+
+/* =========================================================
+   6. AUTH
+   ========================================================= */
+function showLogin(){ $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); $("#fab").classList.add("hidden"); }
+function showApp(){ $("#login").classList.add("hidden"); $("#app").classList.remove("hidden"); renderNav(); navigate("dashboard"); maybeReminder(); }
+function doLogin(){
+  const u=$("#loginUser").value.trim(), p=$("#loginPass").value;
+  if(u===user.username && p===user.password){
+    persist(KEY.session, { in:true, at:nowISO() });
+    $("#loginErr").textContent="";
+    showApp();
+    toast("Selamat datang kembali, "+u, "ok");
+  } else {
+    $("#loginErr").textContent = "Username atau password salah.";
+  }
+}
+function logout(){
+  confirmBox("Logout","Anda yakin ingin keluar dari aplikasi?",()=>{
+    localStorage.removeItem(KEY.session);
+    $("#loginUser").value=""; $("#loginPass").value="";
+    showLogin();
+  }, false);
+}
+
+/* =========================================================
+   7. NAVIGATION
+   ========================================================= */
+const NAV = [
+  {id:"dashboard", ic:"▦", label:"Dashboard"},
+  {id:"notes",     ic:"📝", label:"Catatan"},
+  {id:"timeline",  ic:"⏱", label:"Timeline"},
+  {id:"calendar",  ic:"📅", label:"Kalender"},
+  {id:"search",    ic:"🔍", label:"Pencarian"},
+  {id:"backup",    ic:"⤓", label:"Backup"},
+];
+const PAGE_SUB = {
+  dashboard:"Ringkasan aktivitas Anda", notes:"Kelola semua catatan", timeline:"Riwayat seluruh aktivitas",
+  calendar:"Deadline dalam tampilan bulanan", search:"Cari di seluruh catatan", backup:"Cadangkan & pulihkan data",
+  settings:"Sesuaikan tampilan & preferensi"
+};
+function renderNav(){
+  const counts = { all:notes.filter(n=>!n.archived).length };
+  $("#nav").innerHTML = NAV.map(item=>{
+    const badge = item.id==="notes" ? `<span class="nav-badge">${counts.all}</span>` : "";
+    return `<button class="nav-item" data-nav="${item.id}"><span class="ic">${item.ic}</span><span class="nav-label">${item.label}</span>${badge}</button>`;
+  }).join("");
+  $$("#nav .nav-item").forEach(b=> b.onclick=()=>navigate(b.dataset.nav));
+}
+function navigate(view){
+  activeView = view;
+  $$(".nav-item").forEach(b=> b.classList.toggle("active", b.dataset.nav===view));
+  const titles={dashboard:"Dashboard",notes:"Catatan",timeline:"Timeline",calendar:"Kalender",search:"Pencarian",backup:"Backup",settings:"Pengaturan"};
+  $("#pageTitle").childNodes[0].nodeValue = titles[view]||view;
+  $("#pageSub").textContent = PAGE_SUB[view]||"";
+  const c = $("#content");
+  if(view==="dashboard") c.innerHTML = viewDashboard();
+  else if(view==="notes") c.innerHTML = viewNotes();
+  else if(view==="timeline") c.innerHTML = viewTimeline();
+  else if(view==="calendar") c.innerHTML = viewCalendar();
+  else if(view==="search") c.innerHTML = viewSearch();
+  else if(view==="backup") c.innerHTML = viewBackup();
+  else if(view==="settings") c.innerHTML = viewSettings();
+  bindView(view);
+  renderNav();
+  $$(".nav-item").forEach(b=> b.classList.toggle("active", b.dataset.nav===view));
+}
+
+/* =========================================================
+   8. STATISTIK
+   ========================================================= */
+function stats(){
+  const live = notes.filter(n=>!n.archived);
+  return {
+    total: live.length,
+    baru: live.filter(n=>n.status==="Baru").length,
+    proses: live.filter(n=>n.status==="Sedang Diproses").length,
+    selesai: live.filter(n=>n.status==="Selesai").length,
+    belum: live.filter(n=>n.status!=="Selesai" && n.status!=="Dibatalkan").length,
+    dueToday: live.filter(isDueToday).length,
+    overdue: live.filter(isOverdue).length,
+  };
+}
+
+/* =========================================================
+   9. VIEW: DASHBOARD
+   ========================================================= */
+function viewDashboard(){
+  const s = stats();
+  const cards = [
+    {n:s.total, l:"Total Catatan", ic:"▦", g:"g-indigo"},
+    {n:s.baru, l:"Catatan Baru", ic:"✦", g:"g-cyan"},
+    {n:s.proses, l:"Sedang Diproses", ic:"↻", g:"g-amber"},
+    {n:s.selesai, l:"Selesai", ic:"✓", g:"g-green"},
+    {n:s.belum, l:"Belum Selesai", ic:"●", g:"g-purple"},
+    {n:s.dueToday, l:"Deadline Hari Ini", ic:"⏰", g:"g-slate"},
+    {n:s.overdue, l:"Deadline Terlewat", ic:"⚠", g:"g-red"},
+  ];
+  const statGrid = `<div class="stat-grid">${cards.map(c=>`
+    <div class="stat glass"><div class="ic ${c.g}">${c.ic}</div>
+      <div class="num">${c.n}</div><div class="lbl">${c.l}</div></div>`).join("")}</div>`;
+
+  const recent = [...notes].filter(n=>!n.archived).sort((a,b)=>(b.tanggalDiubah||"").localeCompare(a.tanggalDiubah||"")).slice(0,5);
+  const recentHtml = recent.length ? recent.map(n=>miniNote(n)).join("") :
+    `<div class="empty" style="height:auto;padding:24px"><div><div class="ic">🗒</div><h4>Belum ada catatan</h4><p>Klik tombol + untuk membuat catatan pertama.</p></div></div>`;
+
+  const upcoming = notes.filter(n=>!n.archived && n.deadline && n.status!=="Selesai" && n.status!=="Dibatalkan")
+                        .sort((a,b)=>a.deadline.localeCompare(b.deadline)).slice(0,5);
+  const upcomingHtml = upcoming.length ? upcoming.map(n=>{
+    const late=isOverdue(n);
+    return `<div class="mini-note" data-open="${n.id}">
+      <span class="mini-dot" style="background:${n.warnaLabel||'var(--accent)'}"></span>
+      <div><div class="t">${esc(n.judul||"(Tanpa judul)")}</div><div class="m">${fmtDate(n.deadline)}</div></div>
+      <span class="badge ${late?'b-late':'b-baru'} mini-badge">${late?'Terlewat':'Mendatang'}</span></div>`;
+  }).join("") : `<p style="color:var(--muted);font-size:13.5px">Tidak ada deadline mendatang.</p>`;
+
+  const pct = s.total ? Math.round(s.selesai/s.total*100) : 0;
+
+  return `${statGrid}
+  <div class="dash-cols">
+    <div class="panel glass">
+      <h3>🕘 Catatan Terbaru</h3>${recentHtml}
+    </div>
+    <div>
+      <div class="panel glass">
+        <h3>📈 Progress Penyelesaian</h3>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:2px">${s.selesai} dari ${s.total} catatan selesai</div>
+        <div class="bar"><span style="width:${pct}%"></span></div>
+        <div style="text-align:right;font-weight:800;font-size:18px;margin-top:4px">${pct}%</div>
+      </div>
+      <div class="panel glass">
+        <h3>⏰ Deadline Mendatang</h3>${upcomingHtml}
+      </div>
+    </div>
+  </div>`;
+}
+function miniNote(n){
+  return `<div class="mini-note" data-open="${n.id}">
+    <span class="mini-dot" style="background:${n.warnaLabel||'var(--accent)'}"></span>
+    <div><div class="t">${n.pinned?'📌 ':''}${esc(n.judul||"(Tanpa judul)")}</div>
+      <div class="m">Diubah ${fmtDateTime(n.tanggalDiubah)}</div></div>
+    <span class="badge ${statusClass(n.status)} badge">${esc(n.status)}</span></div>`;
+}
+
+/* =========================================================
+   10. VIEW: NOTES (list + editor)
+   ========================================================= */
+function filteredNotes(){
+  let list = notes.filter(n=>!n.archived);
+  const q = listSearch.trim().toLowerCase();
+  if(q) list = list.filter(n=> (n.judul+" "+n.isi+" "+(n.tag||[]).join(" ")+" "+n.kategori).toLowerCase().includes(q));
+  switch(listFilter){
+    case "Baru": case "Sedang Diproses": case "Pending": case "Selesai": case "Dibatalkan":
+      list = list.filter(n=>n.status===listFilter); break;
+    case "today":   list = list.filter(n=>n.deadline===todayStr()); break;
+    case "tomorrow":{ const t=new Date();t.setDate(t.getDate()+1); const ts=todayStr(t); list=list.filter(n=>n.deadline===ts); break; }
+    case "week":{ const now=new Date(); const wk=new Date();wk.setDate(now.getDate()+7); list=list.filter(n=>n.deadline && n.deadline>=todayStr(now) && n.deadline<=todayStr(wk)); break; }
+    case "overdue": list = list.filter(isOverdue); break;
+    case "favorite":list = list.filter(n=>n.favorite); break;
+  }
+  list.sort((a,b)=>{
+    if(a.pinned!==b.pinned) return a.pinned?-1:1;
+    switch(listSort){
+      case "created": return (b.tanggalDibuat||"").localeCompare(a.tanggalDibuat||"");
+      case "name":    return (a.judul||"").localeCompare(b.judul||"");
+      case "deadline":return (a.deadline||"9999").localeCompare(b.deadline||"9999");
+      case "status":  return STATUS.indexOf(a.status)-STATUS.indexOf(b.status);
+      case "priority":return PRIOR.indexOf(b.prioritas)-PRIOR.indexOf(a.prioritas);
+      default:        return (b.tanggalDiubah||"").localeCompare(a.tanggalDiubah||"");
+    }
+  });
+  return list;
+}
+function viewNotes(){
+  const filters=[["all","Semua"],["Baru","Baru"],["Sedang Diproses","Diproses"],["Pending","Pending"],
+    ["Selesai","Selesai"],["Dibatalkan","Dibatalkan"],["today","Hari Ini"],["tomorrow","Besok"],
+    ["week","Minggu Ini"],["overdue","Terlewat"],["favorite","★ Favorit"]];
+  const chips = filters.map(([v,l])=>`<button class="chip ${listFilter===v?'active':''}" data-f="${v}">${l}</button>`).join("");
+  return `<div class="notes-wrap">
+    <div class="list-pane">
+      <div class="list-tools">
+        <select class="sel" id="sortSel">
+          <option value="updated">Urut: Terakhir diubah</option>
+          <option value="created">Urut: Tanggal dibuat</option>
+          <option value="name">Urut: Nama</option>
+          <option value="deadline">Urut: Deadline</option>
+          <option value="status">Urut: Status</option>
+          <option value="priority">Urut: Prioritas</option>
+        </select>
+      </div>
+      <div class="list-tools" style="overflow:auto;padding-bottom:4px">${chips}</div>
+      <div class="list-scroll" id="noteList"></div>
+    </div>
+    <div class="editor-pane glass empty-on-mobile" id="editorPane"></div>
+  </div>`;
+}
+function renderNoteList(){
+  const list = filteredNotes();
+  const box = $("#noteList"); if(!box) return;
+  if(!list.length){
+    box.innerHTML = `<div class="empty" style="height:auto;padding:36px 12px"><div><div class="ic">🔍</div><h4>Tidak ada catatan</h4><p>Coba ubah filter, atau buat catatan baru lewat tombol +.</p></div></div>`;
+    return;
+  }
+  box.innerHTML = list.map(n=>{
+    const late = isOverdue(n);
+    const snippet = (n.isi||"").replace(/\n/g," ").slice(0,90);
+    const done = (n.checklist||[]).filter(c=>c.done).length, tot=(n.checklist||[]).length;
+    return `<div class="note-card ${n.id===activeNoteId?'active':''}" data-open="${n.id}" style="border-left-color:${n.warnaLabel||'var(--accent)'}">
+      <div class="nc-top">
+        ${n.pinned?'<span class="pin-star">📌</span>':''}${n.favorite?'<span class="pin-star">★</span>':''}
+        <span class="nc-title">${esc(n.judul||"(Tanpa judul)")}</span>
+      </div>
+      <div class="nc-snippet">${esc(snippet)||'<i style="opacity:.6">Belum ada isi…</i>'}</div>
+      <div class="nc-meta">
+        <span class="badge ${statusClass(n.status)}">${esc(n.status)}</span>
+        <span class="badge ${priorClass(n.prioritas)}">${esc(n.prioritas)}</span>
+        ${n.deadline?`<span class="badge ${late?'b-late':'b-baru'}">⏰ ${fmtDate(n.deadline)}</span>`:''}
+        ${tot?`<span class="badge p-rendah">☑ ${done}/${tot}</span>`:''}
+      </div>
+    </div>`;
+  }).join("");
+  $$("#noteList .note-card").forEach(el=> el.onclick=()=>openNote(el.dataset.open));
+}
+function openNote(id){
+  activeNoteId = id;
+  renderNoteList();
+  renderEditor();
+}
+function renderEditor(){
+  const pane = $("#editorPane"); if(!pane) return;
+  const n = notes.find(x=>x.id===activeNoteId);
+  if(!n){
+    pane.innerHTML = `<div class="empty"><div><div class="ic">📝</div><h4>Pilih catatan</h4><p>Pilih catatan di kiri untuk melihat & mengedit. Perubahan tersimpan otomatis.</p></div></div>`;
+    return;
+  }
+  const checklist = (n.checklist||[]).map((c,i)=>`
+    <div class="check-row">
+      <input type="checkbox" data-ci="${i}" ${c.done?'checked':''}/>
+      <input type="text" class="${c.done?'done':''}" data-ct="${i}" value="${esc(c.text)}" placeholder="Item…"/>
+      <button class="del" data-cd="${i}" title="Hapus item">✕</button>
+    </div>`).join("");
+  const tags = (n.tag||[]).map((t,i)=>`<span class="tag-pill">${esc(t)}<button data-tag="${i}">✕</button></span>`).join("");
+  const swatches = LABEL_COLORS.map(c=>`<div class="swatch ${n.warnaLabel===c?'sel':''}" data-color="${c}" style="background:${c}"></div>`).join("");
+
+  pane.innerHTML = `<div class="editor-inner">
+    <div class="editor-head">
+      <input class="title-input grow" id="eTitle" value="${esc(n.judul)}" placeholder="Judul catatan…"/>
+      <button class="icon-btn" id="ePin" title="Pin">${n.pinned?'📌':'📍'}</button>
+      <button class="icon-btn" id="eFav" title="Favorit">${n.favorite?'★':'☆'}</button>
+      <button class="icon-btn" id="eMore" title="Aksi lain">⋯</button>
+    </div>
+    <div class="save-pill"><span class="dot"></span>Tersimpan otomatis · dibuat ${fmtDateTime(n.tanggalDibuat)}</div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="fl"><label>Status</label>
+        <select class="sel" id="eStatus">${STATUS.map(s=>`<option ${n.status===s?'selected':''}>${s}</option>`).join("")}</select></div>
+      <div class="fl"><label>Prioritas</label>
+        <select class="sel" id="ePrior">${PRIOR.map(p=>`<option ${n.prioritas===p?'selected':''}>${p}</option>`).join("")}</select></div>
+      <div class="fl"><label>Kategori</label>
+        <input class="input" id="eKat" value="${esc(n.kategori)}" placeholder="mis. Pekerjaan"/></div>
+    </div>
+    <div class="row">
+      <div class="fl"><label>Deadline (tanggal)</label>
+        <input type="date" class="input" id="eDeadline" value="${n.deadline||''}"/></div>
+      <div class="fl"><label>Jam Deadline</label>
+        <input type="time" class="input" id="eJam" value="${n.jamDeadline||''}"/></div>
+      <div class="fl"><label>Warna Label</label>
+        <div class="swatches" id="eSwatch">${swatches}</div></div>
+    </div>
+
+    <div class="fl" style="margin-bottom:14px"><label>Isi Catatan</label>
+      <textarea class="input" id="eIsi" placeholder="Tulis isi catatan di sini…">${esc(n.isi)}</textarea></div>
+
+    <div class="fl" style="margin-bottom:14px"><label>Checklist</label>
+      <div id="eChecklist">${checklist}</div>
+      <button class="add-check" id="eAddCheck">+ Tambah item</button></div>
+
+    <div class="fl" style="margin-bottom:14px"><label>Tag</label>
+      <div id="eTags" style="margin-bottom:6px">${tags||'<span style="color:var(--muted);font-size:12.5px">Belum ada tag</span>'}</div>
+      <input class="input" id="eTagInput" placeholder="Ketik tag lalu Enter…"/></div>
+
+    <div class="fl" style="margin-bottom:6px"><label>Catatan Tambahan</label>
+      <input class="input" id="eExtra" value="${esc(n.catatanTambahan)}" placeholder="Opsional…"/></div>
+  </div>`;
+
+  bindEditor(n);
+}
+
+/* —— editor bindings + AUTO SAVE —— */
+function touch(n){ n.tanggalDiubah = nowISO(); saveNotes(); }
+function bindEditor(n){
+  const reflectMeta = ()=>{ renderNoteList(); $(".save-pill")&&($(".save-pill").innerHTML=`<span class="dot"></span>Tersimpan otomatis · dibuat ${fmtDateTime(n.tanggalDibuat)}`); };
+
+  $("#eTitle").oninput = e=>{ n.judul=e.target.value; touch(n); reflectMeta(); };
+  $("#eIsi").oninput   = e=>{ n.isi=e.target.value; touch(n); renderNoteList(); };
+  $("#eKat").oninput   = e=>{ n.kategori=e.target.value; touch(n); };
+  $("#eExtra").oninput = e=>{ n.catatanTambahan=e.target.value; touch(n); };
+  $("#eDeadline").onchange = e=>{ const old=n.deadline; n.deadline=e.target.value; if(old!==n.deadline) logActivity(n,`Deadline diubah ke ${fmtDate(n.deadline)}`); touch(n); renderNoteList(); };
+  $("#eJam").onchange  = e=>{ n.jamDeadline=e.target.value; touch(n); };
+  $("#ePrior").onchange= e=>{ n.prioritas=e.target.value; touch(n); renderNoteList(); };
+  $("#eStatus").onchange = e=>{
+    const old=n.status; n.status=e.target.value;
+    if(n.status==="Selesai" && old!=="Selesai") n.tanggalSelesai=nowISO();
+    if(n.status!=="Selesai") n.tanggalSelesai=null;
+    logActivity(n,`Status menjadi <b>${n.status}</b>`);
+    touch(n); renderNoteList();
+  };
+
+  $("#ePin").onclick = ()=>{ n.pinned=!n.pinned; touch(n); renderEditor(); renderNoteList(); toast(n.pinned?"Catatan dipin":"Pin dilepas"); };
+  $("#eFav").onclick = ()=>{ n.favorite=!n.favorite; touch(n); renderEditor(); renderNoteList(); };
+  $("#eMore").onclick = (e)=> noteMenu(e, n);
+
+  // swatch
+  $$("#eSwatch .swatch").forEach(s=> s.onclick=()=>{ n.warnaLabel=s.dataset.color; touch(n); renderEditor(); renderNoteList(); });
+
+  // checklist
+  $$('#eChecklist [data-ci]').forEach(cb=> cb.onchange=()=>{ const i=+cb.dataset.ci; n.checklist[i].done=cb.checked; touch(n); renderEditor(); renderNoteList(); });
+  $$('#eChecklist [data-ct]').forEach(tx=> tx.oninput=()=>{ n.checklist[+tx.dataset.ct].text=tx.value; touch(n); });
+  $$('#eChecklist [data-cd]').forEach(b=> b.onclick=()=>{ n.checklist.splice(+b.dataset.cd,1); touch(n); renderEditor(); renderNoteList(); });
+  $("#eAddCheck").onclick = ()=>{ n.checklist=n.checklist||[]; n.checklist.push({text:"",done:false}); touch(n); renderEditor(); };
+
+  // tags
+  $("#eTagInput").onkeydown = e=>{
+    if(e.key==="Enter" && e.target.value.trim()){ n.tag=n.tag||[]; n.tag.push(e.target.value.trim()); e.target.value=""; touch(n); renderEditor(); }
+  };
+  $$('#eTags [data-tag]').forEach(b=> b.onclick=()=>{ n.tag.splice(+b.dataset.tag,1); touch(n); renderEditor(); });
+}
+function noteMenu(e, n){
+  e.stopPropagation();
+  closeMenu();
+  const m=document.createElement("div");
+  m.className="menu glass"; m.id="ctxMenu";
+  m.innerHTML = `
+    <button data-a="dup">⧉ Duplikat</button>
+    <button data-a="arch">🗄 Arsipkan</button>
+    <button data-a="del" class="danger">🗑 Hapus</button>`;
+  document.body.appendChild(m);
+  const r=e.target.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+"px"; m.style.left=Math.min(r.left, window.innerWidth-190)+"px";
+  m.querySelector('[data-a="dup"]').onclick=()=>{ closeMenu(); duplicateNote(n); };
+  m.querySelector('[data-a="arch"]').onclick=()=>{ closeMenu(); archiveNote(n); };
+  m.querySelector('[data-a="del"]').onclick=()=>{ closeMenu(); deleteNote(n.id); };
+}
+function closeMenu(){ const m=$("#ctxMenu"); if(m) m.remove(); }
+document.addEventListener("click", e=>{ if(!e.target.closest("#ctxMenu") && !e.target.closest("#eMore")) closeMenu(); });
+
+/* =========================================================
+   11. NOTE CRUD
+   ========================================================= */
+function createNote(){
+  const n = {
+    id: uid(), judul:"", isi:"", kategori:"", tag:[], prioritas:"Sedang", status:"Baru",
+    deadline:"", jamDeadline:"", tanggalDibuat:nowISO(), tanggalDiubah:nowISO(), tanggalSelesai:null,
+    catatanTambahan:"", warnaLabel:LABEL_COLORS[0], checklist:[], pinned:false, favorite:false, archived:false,
+    activity:[{ts:nowISO(), text:"Catatan dibuat"}]
+  };
+  notes.unshift(n); saveNotes();
+  if(activeView!=="notes") navigate("notes");
+  setTimeout(()=>{ openNote(n.id); const t=$("#eTitle"); if(t) t.focus(); }, 30);
+  toast("Catatan baru dibuat","ok");
+}
+function duplicateNote(n){
+  const copy = JSON.parse(JSON.stringify(n));
+  copy.id=uid(); copy.judul=(n.judul||"(Tanpa judul)")+" (salinan)";
+  copy.tanggalDibuat=nowISO(); copy.tanggalDiubah=nowISO(); copy.pinned=false;
+  copy.activity=[{ts:nowISO(),text:"Catatan diduplikat"}];
+  notes.unshift(copy); saveNotes(); renderNoteList(); openNote(copy.id);
+  toast("Catatan diduplikat","ok");
+}
+function archiveNote(n){
+  n.archived=true; logActivity(n,"Catatan diarsipkan"); touch(n);
+  if(activeNoteId===n.id){ activeNoteId=null; renderEditor(); }
+  renderNoteList(); renderNav();
+  toast("Catatan diarsipkan","info");
+}
+function deleteNote(id){
+  const doDel=()=>{
+    notes = notes.filter(n=>n.id!==id);
+    if(activeNoteId===id) activeNoteId=null;
+    saveNotes(); renderNoteList(); renderEditor(); renderNav();
+    toast("Catatan dihapus","err");
+  };
+  if(settings.confirmDelete) confirmBox("Hapus catatan","Catatan akan dihapus permanen. Lanjutkan?",doDel);
+  else doDel();
+}
+
+/* =========================================================
+   12. VIEW: TIMELINE
+   ========================================================= */
+function viewTimeline(){
+  const events=[];
+  notes.forEach(n=> (n.activity||[]).forEach(a=> events.push({ts:a.ts, text:a.text, title:n.judul||"(Tanpa judul)", id:n.id})));
+  events.sort((a,b)=> b.ts.localeCompare(a.ts));
+  if(!events.length) return `<div class="panel glass"><div class="empty" style="height:auto"><div><div class="ic">⏱</div><h4>Timeline kosong</h4><p>Aktivitas catatan (dibuat, ubah status, ubah deadline) akan muncul di sini.</p></div></div></div>`;
+
+  // group by date
+  let html="", lastDate="";
+  events.forEach(ev=>{
+    const d=fmtDate(ev.ts);
+    if(d!==lastDate){ if(lastDate) html+="</div></div>"; html+=`<div class="panel glass"><h3>📌 ${d}</h3><div class="tl">`; lastDate=d; }
+    html+=`<div class="tl-item"><div class="tl-date">${fmtDateTime(ev.ts)} · <span style="cursor:pointer;color:var(--accent)" data-open="${ev.id}">${esc(ev.title)}</span></div><div class="tl-text">${ev.text}</div></div>`;
+  });
+  html+="</div></div>";
+  return html;
+}
+
+/* =========================================================
+   13. VIEW: CALENDAR
+   ========================================================= */
+let calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
+function viewCalendar(){
+  const monthNames=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const first=new Date(calYear,calMonth,1);
+  const startDow=(first.getDay()+6)%7; // Senin=0
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const dow=["Sen","Sel","Rab","Kam","Jum","Sab","Min"];
+  let cells = dow.map(d=>`<div class="cal-dow">${d}</div>`).join("");
+  for(let i=0;i<startDow;i++) cells+=`<div class="cal-cell empty"></div>`;
+  const tStr=todayStr();
+  for(let day=1;day<=daysInMonth;day++){
+    const ds=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const dayNotes=notes.filter(n=>!n.archived && n.deadline===ds);
+    const dots=dayNotes.slice(0,3).map(n=>`<div class="cal-dot" style="background:${(n.warnaLabel||'#6366f1')}33;color:${n.warnaLabel||'#6366f1'}">${esc(n.judul||'(Tanpa judul)')}</div>`).join("");
+    const more=dayNotes.length>3?`<div class="cal-dot" style="background:var(--glass-2)">+${dayNotes.length-3} lagi</div>`:"";
+    cells+=`<div class="cal-cell ${ds===tStr?'today':''}" data-day="${ds}"><div class="cal-day">${day}</div>${dots}${more}</div>`;
+  }
+  return `<div class="panel glass">
+    <div class="cal-head">
+      <button class="icon-btn" id="calPrev">‹</button>
+      <div class="page-title" style="min-width:180px;text-align:center">${monthNames[calMonth]} ${calYear}</div>
+      <button class="icon-btn" id="calNext">›</button>
+      <button class="btn-soft" id="calToday" style="margin-left:auto">Hari ini</button>
+    </div>
+    <div class="cal-grid">${cells}</div>
+  </div>`;
+}
+
+/* =========================================================
+   14. VIEW: SEARCH
+   ========================================================= */
+function viewSearch(){
+  return `<div class="panel glass">
+    <div class="topbar-search" style="width:100%;margin:0 0 16px">
+      <span>🔍</span><input id="pageSearchInput" placeholder="Ketik kata kunci — cari di judul, isi, tag, kategori…" />
+    </div>
+    <div id="searchResults"></div>
+  </div>`;
+}
+function runPageSearch(q){
+  const box=$("#searchResults"); if(!box) return;
+  q=q.trim().toLowerCase();
+  if(!q){ box.innerHTML=`<p style="color:var(--muted);font-size:13.5px">Mulai mengetik untuk mencari di seluruh catatan.</p>`; return; }
+  const res=notes.filter(n=>!n.archived).filter(n=>(n.judul+" "+n.isi+" "+(n.tag||[]).join(" ")+" "+n.kategori).toLowerCase().includes(q));
+  if(!res.length){ box.innerHTML=`<div class="empty" style="height:auto"><div><div class="ic">🔍</div><h4>Tidak ditemukan</h4><p>Tidak ada catatan yang cocok dengan "<b>${esc(q)}</b>".</p></div></div>`; return; }
+  box.innerHTML = `<div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">${res.length} hasil ditemukan</div>` + res.map(miniNote).join("");
+  $$('#searchResults [data-open]').forEach(el=> el.onclick=()=>{ activeNoteId=el.dataset.open; navigate("notes"); setTimeout(()=>openNote(activeNoteId),30); });
+}
+
+/* =========================================================
+   15. VIEW: SETTINGS
+   ========================================================= */
+function viewSettings(){
+  const accents=["#6366f1","#06b6d4","#a855f7","#10b981","#f59e0b","#ef4444","#ec4899","#3b82f6"];
+  return `<div class="panel glass" style="max-width:680px">
+    <h3>🎨 Tampilan</h3>
+    <div class="set-row">
+      <div><div class="lbl">Tema</div><div class="desc">Pilih mode terang atau gelap</div></div>
+      <div class="seg"><button id="setLight" class="${settings.theme==='light'?'active':''}">☀ Light</button><button id="setDark" class="${settings.theme==='dark'?'active':''}">🌙 Dark</button></div>
+    </div>
+    <div class="set-row">
+      <div><div class="lbl">Warna Aksen</div><div class="desc">Warna utama tombol & highlight</div></div>
+      <div class="swatches">${accents.map(c=>`<div class="swatch ${settings.accent===c?'sel':''}" data-acc="${c}" style="background:${c}"></div>`).join("")}</div>
+    </div>
+    <div class="set-row">
+      <div><div class="lbl">Ukuran Font</div><div class="desc">Saat ini ${settings.font}px</div></div>
+      <div class="seg"><button data-font="13">Kecil</button><button data-font="15">Normal</button><button data-font="17">Besar</button></div>
+    </div>
+    <div class="set-row">
+      <div><div class="lbl">Konfirmasi Hapus</div><div class="desc">Tampilkan dialog sebelum menghapus catatan</div></div>
+      <div class="switch ${settings.confirmDelete?'on':''}" id="setConfirm"></div>
+    </div>
+    <h3 style="margin-top:26px">🔐 Akun</h3>
+    <div class="set-row">
+      <div><div class="lbl">Ubah Password</div><div class="desc">Untuk akun "${esc(user.username)}"</div></div>
+      <button class="btn-soft" id="setPass">Ubah</button>
+    </div>
+    <div class="set-row">
+      <div><div class="lbl">Hapus Semua Data</div><div class="desc">Reset catatan & pengaturan (tidak bisa dibatalkan)</div></div>
+      <button class="btn-soft" id="setReset" style="color:#f87171;border-color:#f8717155">Reset</button>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   16. VIEW: BACKUP / EXPORT
+   ========================================================= */
+function viewBackup(){
+  return `<div class="bk-grid">
+    <div class="bk-card glass"><div class="ic">💾</div><h4>Export JSON</h4><p>Cadangkan seluruh data untuk dipindah ke komputer lain.</p><button class="btn-soft" id="bkExportJson">Unduh JSON</button></div>
+    <div class="bk-card glass"><div class="ic">📥</div><h4>Import JSON</h4><p>Pulihkan data dari file cadangan JSON.</p><button class="btn-soft" id="bkImportJson">Pilih File</button></div>
+    <div class="bk-card glass"><div class="ic">📊</div><h4>Export CSV</h4><p>Buka di Excel / Google Sheets.</p><button class="btn-soft" id="bkExportCsv">Unduh CSV</button></div>
+    <div class="bk-card glass"><div class="ic">🌐</div><h4>Export HTML</h4><p>Laporan catatan dalam satu halaman web.</p><button class="btn-soft" id="bkExportHtml">Unduh HTML</button></div>
+    <div class="bk-card glass"><div class="ic">🖨</div><h4>Export PDF</h4><p>Cetak / simpan sebagai PDF lewat dialog print.</p><button class="btn-soft" id="bkExportPdf">Cetak PDF</button></div>
+  </div>`;
+}
+
+/* =========================================================
+   17. EXPORT / IMPORT FUNCTIONS
+   ========================================================= */
+function download(filename, content, mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportJson(){
+  download(`noteboard-backup-${todayStr()}.json`, JSON.stringify({version:1, exportedAt:nowISO(), notes, settings},null,2), "application/json");
+  toast("Backup JSON diunduh","ok");
+}
+function importJson(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
+  inp.onchange=()=>{
+    const f=inp.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const data=JSON.parse(r.result);
+        if(!Array.isArray(data.notes)) throw new Error("Format tidak valid");
+        confirmBox("Import data",`File berisi ${data.notes.length} catatan. Data akan menggantikan data saat ini. Lanjutkan?`,()=>{
+          notes=data.notes; if(data.settings) settings={...settings,...data.settings};
+          saveNotes(); saveSettings(); navigate("dashboard"); renderNav();
+          toast("Data berhasil diimpor","ok");
+        });
+      }catch(e){ toast("Gagal membaca file: "+e.message,"err"); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function exportCsv(){
+  const cols=["id","judul","kategori","prioritas","status","deadline","jamDeadline","tanggalDibuat","tanggalDiubah","tanggalSelesai","tag","isi"];
+  const head=cols.join(",");
+  const rows=notes.map(n=>cols.map(c=>{
+    let v=n[c]; if(Array.isArray(v)) v=v.join("; "); v=(v??"").toString().replace(/"/g,'""');
+    return `"${v}"`;
+  }).join(","));
+  download(`noteboard-${todayStr()}.csv`, "\uFEFF"+head+"\n"+rows.join("\n"), "text/csv");
+  toast("CSV diunduh","ok");
+}
+function buildReportHtml(){
+  const rows=notes.filter(n=>!n.archived).map(n=>`
+    <tr>
+      <td>${esc(n.judul||"(Tanpa judul)")}</td><td>${esc(n.status)}</td><td>${esc(n.prioritas)}</td>
+      <td>${n.deadline?fmtDate(n.deadline):"-"}</td><td>${esc(n.kategori||"-")}</td>
+      <td>${esc((n.isi||"").slice(0,140))}</td>
+    </tr>`).join("");
+  return `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Laporan NoteBoard</title>
+    <style>body{font-family:Arial,sans-serif;padding:30px;color:#1c2540}h1{margin:0}small{color:#666}
+    table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}
+    th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
+    th{background:#6366f1;color:#fff}tr:nth-child(even){background:#f5f6fa}</style></head>
+    <body><h1>Laporan Catatan — NoteBoard</h1><small>Dibuat ${fmtDateTime(nowISO())} · ${notes.filter(n=>!n.archived).length} catatan</small>
+    <table><thead><tr><th>Judul</th><th>Status</th><th>Prioritas</th><th>Deadline</th><th>Kategori</th><th>Isi</th></tr></thead>
+    <tbody>${rows}</tbody></table></body></html>`;
+}
+function exportHtml(){ download(`noteboard-laporan-${todayStr()}.html`, buildReportHtml(), "text/html"); toast("Laporan HTML diunduh","ok"); }
+function exportPdf(){
+  const area=$("#print-area");
+  area.innerHTML = buildReportHtml().replace(/^[\s\S]*?<body>/,"").replace(/<\/body>[\s\S]*$/,"");
+  area.classList.remove("hidden");
+  window.print();
+  setTimeout(()=>area.classList.add("hidden"), 500);
+}
+
+/* =========================================================
+   18. POPUP REMINDER (saat aplikasi dibuka)
+   ========================================================= */
+function maybeReminder(){
+  const s=stats();
+  if(s.belum===0 && s.dueToday===0 && s.overdue===0) return;
+  modal(`<h3>👋 Pengingat Hari Ini</h3>
+    <p style="margin-bottom:16px">Berikut ringkasan yang perlu perhatian Anda:</p>
+    <div class="rem-line"><div class="ic g-purple">●</div><div><b>${s.belum}</b> Catatan belum selesai</div></div>
+    <div class="rem-line"><div class="ic g-slate">⏰</div><div><b>${s.dueToday}</b> Deadline hari ini</div></div>
+    <div class="rem-line"><div class="ic g-red">⚠</div><div><b>${s.overdue}</b> Deadline terlewat</div></div>
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="btn-ghost" id="remClose">Tutup</button>
+      <button class="btn" id="remGo" style="width:auto">Lihat catatan</button>
+    </div>`);
+  $("#remClose").onclick=closeModal;
+  $("#remGo").onclick=()=>{ closeModal(); listFilter="overdue"; navigate("notes"); };
+}
+
+/* =========================================================
+   19. BIND PER-VIEW
+   ========================================================= */
+function bindView(view){
+  // open handlers used in several views
+  $$('[data-open]').forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound="1";
+    el.addEventListener("click", ()=>{ activeNoteId=el.dataset.open; navigate("notes"); setTimeout(()=>openNote(activeNoteId),30); });
+  });
+
+  if(view==="notes"){
+    $("#sortSel").value=listSort;
+    $("#sortSel").onchange=e=>{ listSort=e.target.value; renderNoteList(); };
+    $$(".chip").forEach(c=> c.onclick=()=>{ listFilter=c.dataset.f; $$(".chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); renderNoteList(); });
+    renderNoteList(); renderEditor();
+  }
+  if(view==="calendar"){
+    $("#calPrev").onclick=()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} navigate("calendar"); };
+    $("#calNext").onclick=()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} navigate("calendar"); };
+    $("#calToday").onclick=()=>{ const d=new Date(); calMonth=d.getMonth(); calYear=d.getFullYear(); navigate("calendar"); };
+    $$(".cal-cell[data-day]").forEach(c=> c.onclick=()=> showDayNotes(c.dataset.day));
+  }
+  if(view==="search"){
+    const inp=$("#pageSearchInput"); inp.focus();
+    inp.oninput=()=>runPageSearch(inp.value);
+    runPageSearch("");
+  }
+  if(view==="settings") bindSettings();
+  if(view==="backup"){
+    $("#bkExportJson").onclick=exportJson;
+    $("#bkImportJson").onclick=importJson;
+    $("#bkExportCsv").onclick=exportCsv;
+    $("#bkExportHtml").onclick=exportHtml;
+    $("#bkExportPdf").onclick=exportPdf;
+  }
+}
+function showDayNotes(ds){
+  const list=notes.filter(n=>!n.archived && n.deadline===ds);
+  const body = list.length ? list.map(n=>`<div class="mini-note" data-open="${n.id}">
+      <span class="mini-dot" style="background:${n.warnaLabel||'var(--accent)'}"></span>
+      <div><div class="t">${esc(n.judul||"(Tanpa judul)")}</div><div class="m">${esc(n.status)}</div></div>
+      <span class="badge ${statusClass(n.status)}">${esc(n.status)}</span></div>`).join("")
+    : `<p style="color:var(--muted)">Tidak ada catatan dengan deadline ini.</p>`;
+  modal(`<h3>📅 ${fmtDate(ds)}</h3><div style="margin:12px 0">${body}</div>
+    <div class="modal-actions"><button class="btn-ghost" id="dnClose">Tutup</button></div>`);
+  $("#dnClose").onclick=closeModal;
+  $$('#modalRoot [data-open]').forEach(el=> el.onclick=()=>{ closeModal(); activeNoteId=el.dataset.open; navigate("notes"); setTimeout(()=>openNote(activeNoteId),30); });
+}
+function bindSettings(){
+  $("#setLight").onclick=()=>{ settings.theme="light"; saveSettings(); navigate("settings"); };
+  $("#setDark").onclick =()=>{ settings.theme="dark"; saveSettings(); navigate("settings"); };
+  $$('[data-acc]').forEach(s=> s.onclick=()=>{ settings.accent=s.dataset.acc; saveSettings(); navigate("settings"); });
+  $$('[data-font]').forEach(b=> b.onclick=()=>{ settings.font=+b.dataset.font; saveSettings(); navigate("settings"); });
+  $("#setConfirm").onclick=()=>{ settings.confirmDelete=!settings.confirmDelete; saveSettings(); $("#setConfirm").classList.toggle("on"); };
+  $("#setPass").onclick=()=>{
+    modal(`<h3>Ubah Password</h3>
+      <div class="field"><label>Password baru</label><input id="np" type="password" class="input"/></div>
+      <div class="field"><label>Ulangi password</label><input id="np2" type="password" class="input"/></div>
+      <div class="modal-actions"><button class="btn-ghost" id="pCancel">Batal</button><button class="btn" id="pSave" style="width:auto">Simpan</button></div>`);
+    $("#pCancel").onclick=closeModal;
+    $("#pSave").onclick=()=>{
+      const a=$("#np").value, b=$("#np2").value;
+      if(a.length<4) return toast("Password minimal 4 karakter","err");
+      if(a!==b) return toast("Password tidak sama","err");
+      user.password=a; persist(KEY.user,user); closeModal(); toast("Password diperbarui","ok");
+    };
+  };
+  $("#setReset").onclick=()=>{
+    confirmBox("Reset semua data","Seluruh catatan & pengaturan akan dihapus permanen. Lanjutkan?",()=>{
+      notes=[]; settings={theme:"dark",accent:"#6366f1",font:15,confirmDelete:true};
+      activeNoteId=null; saveNotes(); saveSettings(); navigate("dashboard"); renderNav();
+      toast("Semua data telah direset","err");
+    });
+  };
+}
+
+/* =========================================================
+   20. GLOBAL EVENTS
+   ========================================================= */
+$("#loginBtn").onclick=doLogin;
+$("#loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+$("#loginUser").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#loginPass").focus(); });
+$("#logoutBtn").onclick=logout;
+$("#themeBtn").onclick=toggleTheme;
+$("#fab").onclick=createNote;
+$("#toggleSide").onclick=()=> $("#sidebar").classList.toggle("collapsed");
+$$('[data-nav]').forEach(b=> b.onclick=()=>navigate(b.dataset.nav));
+
+// global search in topbar -> opens notes filtered
+$("#globalSearch").addEventListener("input", e=>{
+  listSearch=e.target.value;
+  if(activeView!=="notes"){ navigate("notes"); }
+  const inp=$("#globalSearch"); // keep focus
+  renderNoteList();
+  inp.focus();
+});
+
+// Keyboard shortcuts
+document.addEventListener("keydown", e=>{
+  if($("#app").classList.contains("hidden")) return;
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if(e.key==="Escape"){ closeModal(); closeMenu(); }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="n"){ e.preventDefault(); createNote(); }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="f"){ e.preventDefault(); $("#globalSearch").focus(); }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="d"){ e.preventDefault(); const n=notes.find(x=>x.id===activeNoteId); if(n) duplicateNote(n); }
+  if(e.key==="Delete" && !typing && activeNoteId){ e.preventDefault(); deleteNote(activeNoteId); }
+});
+
+/* =========================================================
+   21. BOOT
+   ========================================================= */
+function boot(){
+  applySettings();
+  setTimeout(()=>{
+    $("#loader").style.opacity="0";
+    setTimeout(()=> $("#loader").classList.add("hidden"), 500);
+    const session=load(KEY.session,null);
+    if(session && session.in) showApp(); else showLogin();
+  }, 900);
+}
+boot();
+</script>
+</body>
+</html>
